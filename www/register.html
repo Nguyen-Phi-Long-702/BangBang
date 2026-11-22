@@ -1,0 +1,25 @@
+<!doctype html><html lang="vi"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Đăng ký tài khoản — Bang Bang</title>
+<style>body{margin:0;background:#08111f;color:#e9f3ff;font:16px system-ui,sans-serif}main{max-width:420px;margin:8vh auto;padding:26px;background:#101e32;border:1px solid #254564;border-radius:14px}h1{font-size:25px}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;width:100%;padding:12px;border-radius:8px;border:1px solid #315778;font:inherit}input{background:#0b1727;color:#fff}button{background:#187ac2;color:#fff;cursor:pointer;margin-top:20px}button:disabled{opacity:.5;cursor:default}a{color:#7acaff}.muted{color:#a5bdd5;font-size:14px;line-height:1.6}#message{min-height:24px;line-height:1.5}.error{color:#ff9ba5}.ok{color:#47d18c}@media(max-width:500px){main{margin:20px 12px;padding:20px}}</style></head>
+<body><main><h1>Đăng ký tài khoản khách</h1><p id="status" class="muted" aria-live="polite">Đang kiểm tra đăng ký…</p>
+<form id="registrationForm"><label for="username">Tên tài khoản</label><input id="username" autocomplete="username" minlength="3" maxlength="32" required>
+<label for="password">Mật khẩu</label><input id="password" type="password" autocomplete="new-password" minlength="6" maxlength="128" required>
+<label for="confirmPassword">Nhập lại mật khẩu</label><input id="confirmPassword" type="password" autocomplete="new-password" minlength="6" maxlength="128" required>
+<p class="muted">Bạn sẽ tạo tên nhân vật sau khi vào game.</p>
+<button id="registerButton" disabled>Đăng ký</button></form><p id="message" role="alert"></p><a href="/">Về trang đăng nhập</a></main>
+<script>
+(function(){
+  var busy=false,done=false,open=false;
+  function el(id){return document.getElementById(id)}
+  function request(method,url,data,cb){var x=new XMLHttpRequest();x.open(method,url,true);x.timeout=15000;x.setRequestHeader('Content-Type','application/json');x.onload=function(){var p={};try{p=JSON.parse(x.responseText)}catch(e){}cb(x.status>=200&&x.status<300&&p.success?null:(p.message||'Không thể xử lý yêu cầu.'),p)};x.onerror=x.ontimeout=function(){cb('Không thể kết nối máy chủ. Vui lòng thử lại.',{})};x.send(data?JSON.stringify(data):null)}
+  function dateVN(seconds){return new Date((seconds+25200)*1000).toISOString().slice(0,16).replace('T',' ')+' (giờ Việt Nam)'}
+  function refresh(){request('GET','/api/registration',null,function(error,data){open=!error&&data.registration.isOpen;el('registerButton').disabled=busy||done||!open;el('status').textContent=error||data.registration.message+' Còn '+data.registration.remaining+' suất.'+(data.registration.reason=='scheduled'?' Mở lúc '+dateVN(data.registration.opensAt):'')})}
+  el('registrationForm').onsubmit=function(e){e.preventDefault();if(busy||done||!open)return false;
+    if(el('password').value!==el('confirmPassword').value){el('message').className='error';el('message').textContent='Hai mật khẩu chưa khớp.';return false}
+    busy=true;el('registerButton').disabled=true;el('message').textContent='Đang tạo tài khoản…';
+    request('POST','/api/register',{username:el('username').value,password:el('password').value},function(error,data){busy=false;el('message').className=error?'error':'ok';el('message').textContent=error||'Đã tạo tài khoản '+data.username+'. Bạn có thể về trang đăng nhập để vào game.';if(!error){done=true;el('password').value='';el('confirmPassword').value=''}refresh()});return false
+  };
+  refresh();setInterval(function(){if(!busy&&!done)refresh()},15000);
+})();
+</script><script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"79ac88e4a25d4665b532deb5149cf4fd","r":1,"spa":2}' crossorigin="anonymous"></script>
+</body></html>
