@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kiểm tra tải tài nguyên Bang Bang Dark</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:24px;background:#101b2b;color:#e8f1ff;font:16px Arial,sans-serif}main{max-width:1050px;margin:auto}h1{font-size:25px}p{line-height:1.5;color:#bfcfe4}button{padding:12px 18px;margin:8px 8px 12px 0;border:0;border-radius:6px;background:#29b8de;color:#071d30;font-weight:bold;cursor:pointer}button:disabled{opacity:.5;cursor:default}table{width:100%;border-collapse:collapse;background:#17283f}th,td{text-align:left;padding:12px;border-bottom:1px solid #31445e}th{font-size:13px;color:#a6c5ec}td{font-size:14px}#route{color:#6ed6ff;font-weight:bold}#status{min-height:26px;color:#e2cd8a}textarea{width:100%;height:180px;margin-top:14px;padding:12px;background:#0c1523;color:#c9e1ff;border:1px solid #31445e;font:12px monospace}.table-scroll{overflow:auto}small{color:#a6bfdc}
+</style>
+<main><h1>Kiểm tra tải tài nguyên</h1>
+<p>Địa chỉ đang kiểm tra: <span id="route"></span><br>Phép thử tải 6 tệp công khai, tổng khoảng 3 MB. Không cần đăng nhập.</p>
+<button id="start">Bắt đầu kiểm tra</button><button id="stop" disabled>Dừng</button>
+<div id="status" role="status">Sẵn sàng.</div>
+<div class="table-scroll"><table><thead><tr><th>Tài nguyên</th><th>Trạng thái</th><th>Chờ phản hồi</th><th>Tổng thời gian</th><th>Dữ liệu</th><th>CDN</th></tr></thead><tbody id="rows"></tbody></table></div>
+<p>Sau khi chạy xong, sao chép kết quả bên dưới để đối chiếu hai đường tải. Giữ nguyên cache trình duyệt.</p>
+<textarea id="result" readonly aria-label="Kết quả kiểm tra"></textarea>
+<small>Đây là trang kiểm tra đường tải HTTP. Không dùng trang này để vào trận.</small></main>
+<script>
+(function(){
+ 'use strict';
+ var assets=[
+  ['Mô hình tank','/rez/zh_CN/tank/body/d19d56289fcdbab9fd5c21d1f6ac902d.png'],
+  ['Hiệu ứng skill','/rez/zh_CN/swf/skills/5af76be1d626d8a9228852ab092e9a85.swf'],
+  ['Hoạt ảnh bản đồ','/rez/zh_CN/swf/sceneItem/80a8c2bb8839fdfe95feee0e23a88e13.swf'],
+  ['Nền trang web','/assets/home_loading_20261022.jpg'],
+  ['Module tải trận','/rez/zh_CN/module/battlecmpt_cancel_20261022.swf'],
+  ['Danh sách tài nguyên','/rez/c351b45bedfe0745befbe3d53e59c9c5.xml']
+ ];
+ var rows=document.getElementById('rows'),start=document.getElementById('start'),stop=document.getElementById('stop');
+ var active=[],results=[],next=0,finished=0,running=false,started=0;
+ document.getElementById('route').textContent=location.host;
+ function now(){return window.performance&&performance.now?performance.now():Date.now();}
+ function ms(n){return Math.round(n)+' ms';}
+ function cell(row,value){var c=document.createElement('td');c.textContent=value;row.appendChild(c);return c;}
+ function draw(){
+  rows.innerHTML='';
+  for(var i=0;i<assets.length;++i){var tr=document.createElement('tr');cell(tr,assets[i][0]);cell(tr,'Chờ');cell(tr,'—');cell(tr,'—');cell(tr,'—');cell(tr,'—');rows.appendChild(tr);}
+ }
+ function output(){
+  document.getElementById('result').value=JSON.stringify({version:'loading-check-20261022',host:location.host,time:new Date().toISOString(),elapsed_ms:Math.round(now()-started),user_agent:navigator.userAgent,results:results},null,2);
+ }
+ function launch(index){
+  var xhr=new XMLHttpRequest(),begin=now(),first=null,done=false,cells=rows.children[index].children;
+  cells[1].textContent='Đang tải';active.push(xhr);
+  xhr.open('GET',assets[index][1],true);xhr.responseType='arraybuffer';xhr.timeout=20000;
+  // Force browser revalidation while retaining the CDN's existing cache key.
+  // No cache-busting query or global cache purge is used by this check.
+  xhr.setRequestHeader('Cache-Control','no-cache');
+  xhr.onreadystatechange=function(){if(xhr.readyState>=2&&first===null){first=now()-begin;cells[2].textContent=ms(first);}};
+  xhr.onprogress=function(e){cells[4].textContent=Math.round(e.loaded/1024)+' KB';};
+  function finish(reason){
+   if(done)return;done=true;var elapsed=now()-begin,bytes=xhr.response&&xhr.response.byteLength||0;
+   var cache=xhr.getResponseHeader('CF-Cache-Status')||'',ray=xhr.getResponseHeader('CF-RAY')||'';
+   cells[1].textContent=reason==='load'?'HTTP '+xhr.status:reason;cells[2].textContent=first===null?'—':ms(first);cells[3].textContent=ms(elapsed);cells[4].textContent=Math.round(bytes/1024)+' KB';cells[5].textContent=cache||'Không có';
+   results.push({asset:assets[index][0],path:assets[index][1],status:xhr.status,event:reason,first_byte_ms:first===null?null:Math.round(first),total_ms:Math.round(elapsed),bytes:bytes,cache:cache,ray:ray});
+   active.splice(active.indexOf(xhr),1);++finished;output();
+   document.getElementById('status').textContent='Đã kiểm tra '+finished+'/'+assets.length+' tệp.';
+   if(running&&next<assets.length)launch(next++);
+   if(finished===assets.length){running=false;start.disabled=false;stop.disabled=true;document.getElementById('status').textContent='Hoàn tất. Bạn có thể sao chép kết quả bên dưới.';}
+  }
+  xhr.onload=function(){finish('load');};xhr.onerror=function(){finish('error');};xhr.ontimeout=function(){finish('timeout');};xhr.onabort=function(){finish('abort');};xhr.send();
+ }
+ start.onclick=function(){if(running)return;results=[];active=[];next=0;finished=0;running=true;started=now();draw();start.disabled=true;stop.disabled=false;document.getElementById('status').textContent='Đang tải 3 tệp song song…';for(var i=0;i<3;++i)launch(next++);};
+ stop.onclick=function(){running=false;var pending=active.slice();for(var i=0;i<pending.length;++i)pending[i].abort();start.disabled=false;stop.disabled=true;document.getElementById('status').textContent='Đã dừng.';output();};
+ draw();
+})();
+</script></html>
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d87301792088814092" integrity="sha512-UKNk8GbxkABxKcXYuLkO16EleLGUkcvJWtpSNmExE0Too3ZaFAxTscNWEc1OdAv5/BikHawapSCaiD2XCmp+Bw==" data-cf-beacon='{"version":"2024.11.0","token":"79ac88e4a25d4665b532deb5149cf4fd","r":1,"spa":2}' crossorigin="anonymous"></script>
